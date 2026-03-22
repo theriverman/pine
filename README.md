@@ -2,7 +2,9 @@
 
 `pine` is a Go CLI for Taiga, built on [`github.com/theriverman/taigo/v2`](https://github.com/theriverman/taigo/tree/v2) and [`urfave/cli/v3`](https://cli.urfave.org/).
 
-The current scope is the first milestone:
+It is aimed at people who want a local CLI for common Taiga workflows with saved context, structured output, and shell completion.
+
+## Current scope
 
 - saved Taiga instance management
 - saved project management per instance
@@ -24,37 +26,17 @@ The current scope is the first milestone:
   - `user-stories` / `us`
   - `tasks`
 
-## Build
+## Install
 
-`pine` depends on `github.com/theriverman/taigo/v2` as a normal Go module dependency.
+Download a prebuilt binary from [GitHub Releases](https://github.com/theriverman/pine/releases), or build from source if you prefer.
 
-```bash
-go build ./...
-```
-
-Cross-platform release builds are handled by the included `Makefile`:
+To build the current host binary locally:
 
 ```bash
-make
 make build
-make darwin
-make linux
-make windows
 ```
 
-Running `make` with no target prints the available targets and the derived build metadata.
-`make build` creates a binary for the current host OS and architecture.
-The generated binaries are written to `dist/`.
-Tagged GitHub releases are published from semver tags by GoReleaser after the full CI workflow passes.
-
-During each build, `make` collects:
-
-- the latest git tag as the app version
-- the latest commit hash
-- the Go version used for the build
-
-These values are injected into the binary and exposed through `pine --version`.
-If the repository has no git tags yet, the version falls back to `dev`.
+The binary is written to `dist/`.
 
 ## Version information
 
@@ -115,67 +97,51 @@ Supported environment variables:
 - `PINE_TOKEN`
 - `PINE_CONFIG_DIR`
 
-## Instance workflow
+## Quick start
 
-Add an instance interactively:
+Add a Taiga instance interactively:
 
 ```bash
 pine ctx instance add
 ```
 
-`pine` fetches `<frontend>/conf.json`, requires an `api` key, and derives the Taigo client `BaseURL` and API version from it.
+`pine` fetches `<frontend>/conf.json`, requires an `api` key, and derives the Taiga client base URL and API version from it.
 
-List instances:
+List saved instances:
 
 ```bash
 pine ctx instance list
 ```
 
-Switch the active instance:
+Select the active instance:
 
 ```bash
-pine ctx instance use
 pine ctx instance use local
 ```
 
-Remove an instance:
-
-```bash
-pine ctx instance remove
-pine ctx instance remove local
-```
-
-## Project workflow
-
-Add a project from the active Taiga instance:
+Add a project from the active instance:
 
 ```bash
 pine ctx project add
 ```
 
-List saved projects:
-
-```bash
-pine ctx project list
-```
-
 Select the default project:
 
 ```bash
-pine ctx project use
 pine ctx project use demo
-```
-
-Remove a saved project:
-
-```bash
-pine ctx project remove
 ```
 
 Show the current context:
 
 ```bash
 pine ctx show
+```
+
+Remove saved context when needed:
+
+```bash
+pine ctx instance remove local
+pine ctx project remove demo
 ```
 
 ## Shell completion
@@ -281,52 +247,13 @@ pine epics bulk-creation --json=/path/to/epics.json
 - `pine epics clone --with-related-user-stories` clones the epic, clones each related user story, and links the cloned user stories to the cloned epic
 - `pine tasks clone --user-story=<id>` clones a task directly into a different user story
 
-## Current scope and limitations
+## Scope and limitations
 
-- This milestone intentionally focuses on curated endpoints rather than the entire Taiga API surface.
-- `resolver`, attachments, import/export, and other admin-heavy or specialised endpoints are not included yet.
-- Linux users must provide credentials through environment variables instead of native secret storage.
-- `edit` is user-friendly merged update behaviour; explicit field clearing is handled through `--clear`.
+- this milestone intentionally focuses on curated endpoints rather than the entire Taiga API surface
+- `resolver`, attachments, import/export, and other admin-heavy or specialised endpoints are not included yet
+- Linux users must provide credentials through environment variables instead of native secret storage
+- `edit` uses merged-update behaviour; explicit field clearing is handled through `--clear`
 
-## Testing
+## Contributing
 
-Run the unit suite:
-
-```bash
-go test ./...
-```
-
-Run the live integration suite against a local Taiga instance:
-
-```bash
-PINE_RUN_INTEGRATION=1 go test ./...
-```
-
-GitHub Actions boots a pinned [`taigaio/taiga-docker`](https://github.com/taigaio/taiga-docker) sandbox on `http://localhost:9000`, creates an admin user with Django's non-interactive `createsuperuser` flow, and creates an ephemeral integration project before running the same live suite.
-
-Optional integration environment variables:
-
-- `PINE_INTEGRATION_FRONTEND`
-- `PINE_INTEGRATION_USERNAME`
-- `PINE_INTEGRATION_PASSWORD`
-- `PINE_INTEGRATION_PROJECT_ID`
-- `PINE_INTEGRATION_PROJECT_SLUG`
-
-The integration tests default to:
-
-- frontend: `http://localhost:9000`
-- username: `admin`
-- password: `123123`
-- project: `demo`
-
-## Notes
-
-The CLI has been exercised against a live Docker Taiga sandbox at `http://localhost:9000`, including:
-
-- instance discovery through `conf.json`
-- saved instance and project flows
-- paginated list commands
-- `us` create/edit/clear/delete
-- `epics`, `us`, and `tasks` clone flows
-- `epics` bulk creation
-- completion generation
+Contributor and development workflow documentation lives in [`CONTRIBUTE.md`](./CONTRIBUTE.md).
