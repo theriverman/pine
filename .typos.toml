@@ -1,0 +1,13 @@
+[default]
+ignore-hex = true
+extend-ignore-re = [
+  "\\b\\d{14}-[0-9a-f]{12}\\b",
+]
+
+[files]
+extend-exclude = [
+  ".git",
+  ".tmp-check",
+  "dist",
+  "go.sum",
+]

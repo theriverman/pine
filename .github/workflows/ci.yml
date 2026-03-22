@@ -1,0 +1,342 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify module downloads
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Verify formatting
+        run: |
+          test -z "$(gofmt -l .)"
+
+      - name: Verify module files are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Detect dead code
+        run: |
+          GOBIN="$(pwd)/.bin" go install golang.org/x/tools/cmd/deadcode@v0.43.0
+          "$(pwd)/.bin/deadcode" ./...
+
+      - name: Check for vulnerable dependencies
+        run: |
+          GOBIN="$(pwd)/.bin" go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          "$(pwd)/.bin/govulncheck" ./...
+
+      - name: Check spelling and typos
+        uses: crate-ci/typos@2d0ce569feab1f8752f1dde43cc2f2aa53236e06 # v1.40.0
+        with:
+          config: .typos.toml
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9
+        with:
+          version: v2.5.0
+          args: --timeout=5m
+
+  test-matrix:
+    name: Tests / ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run unit tests
+        run: go test -count=1 -shuffle=on ./...
+
+  race-and-coverage:
+    name: Race And Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run race detector and coverage
+        run: go test -count=1 -shuffle=on -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Print coverage summary
+        run: go tool cover -func=coverage.out
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: coverage.out
+          path: coverage.out
+          if-no-files-found: error
+
+  native-smoke:
+    name: Native Smoke / ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            binary: ./dist/pine
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            binary: ./dist/pine
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            binary: ./dist/pine
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+            binary: ./dist/pine
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            binary: ./dist/pine.exe
+          - runner: windows-11-arm
+            goos: windows
+            goarch: arm64
+            binary: ./dist/pine.exe
+    steps:
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build native binary
+        run: |
+          mkdir -p dist
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o "${{ matrix.binary }}" .
+
+      - name: Smoke test native binary
+        run: ./scripts/smoke-cli.sh "${{ matrix.binary }}"
+
+  release-targets:
+    name: Release Target / ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - darwin
+          - linux
+          - windows
+    steps:
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build release target
+        run: |
+          make clean
+          make "${{ matrix.target }}"
+
+      - name: Verify release binaries exist
+        run: |
+          case "${{ matrix.target }}" in
+            darwin)
+              test -f dist/pine-darwin-amd64
+              test -f dist/pine-darwin-arm64
+              ;;
+            linux)
+              test -f dist/pine-linux-amd64
+              test -f dist/pine-linux-arm64
+              ;;
+            windows)
+              test -f dist/pine-windows-amd64.exe
+              test -f dist/pine-windows-arm64.exe
+              ;;
+          esac
+
+      - name: Upload release target artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-target-${{ matrix.target }}
+          path: dist/
+          if-no-files-found: error
+
+  integration-live:
+    name: Live Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check Docker tooling
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Check out pinned Taiga Docker stack
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: taigaio/taiga-docker
+          ref: e12c106b265ab8c51ee7e62b744ffddd0f0d9771 # 6.9.0
+          path: .taiga-docker
+          fetch-depth: 1
+
+      - name: Launch Taiga stack
+        working-directory: ./.taiga-docker
+        run: ./launch-taiga.sh
+
+      - name: Seed Taiga admin account
+        env:
+          DJANGO_SUPERUSER_EMAIL: admin@example.com
+          DJANGO_SUPERUSER_USERNAME: admin
+          DJANGO_SUPERUSER_PASSWORD: 123123
+        run: |
+          ./scripts/ci/seed_taiga_admin.sh ./.taiga-docker
+
+      - name: Prepare integration environment
+        run: |
+          go run ./scripts/ci/prepare_integration_env \
+            --frontend http://localhost:9000 \
+            --username admin \
+            --password 123123 \
+            --project-name pine-ci \
+            --project-slug pine-ci \
+            --project-description "Ephemeral Taiga project for pine integration tests" \
+            --github-env "$GITHUB_ENV"
+
+      - name: Run live integration tests
+        run: go test -count=1 -run '^TestIntegration' ./...
+
+      - name: Print Taiga diagnostics on failure
+        if: failure()
+        run: |
+          if [ ! -d ./.taiga-docker ]; then
+            exit 0
+          fi
+          cd ./.taiga-docker
+          docker compose ps || true
+          docker compose logs --no-color --tail=200 || true
+
+      - name: Stop Taiga stack
+        if: always()
+        run: |
+          if [ ! -d ./.taiga-docker ]; then
+            exit 0
+          fi
+          cd ./.taiga-docker
+          docker compose down -v || true
+
+  publish-release:
+    name: Publish Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - quality
+      - test-matrix
+      - race-and-coverage
+      - native-smoke
+      - release-targets
+      - integration-live
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        id: setup-go
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate semver tag
+        run: |
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]
+
+      - name: Publish GitHub release with GoReleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          distribution: goreleaser
+          version: v2.14.3
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOVERSION: ${{ steps.setup-go.outputs.go-version }}
