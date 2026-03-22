@@ -1,6 +1,15 @@
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/banner-light.png">
+  <img alt="Pine Banner." src="assets/banner-dark.png">
+</picture>
+</p>
+
+
 # Pine
 
-`pine` is a Go CLI for Taiga, built on [`github.com/theriverman/taigo/v2`](https://github.com/theriverman/taigo/tree/v2) and [`urfave/cli/v3`](https://cli.urfave.org/).
+`pine` is a Go CLI for Taiga, built on [`github.com/theriverman/taigo`](https://github.com/theriverman/taigo) and [`urfave/cli/v3`](https://cli.urfave.org/).
 
 It is aimed at people who want a local CLI for common Taiga workflows with saved context, structured output, and shell completion.
 
