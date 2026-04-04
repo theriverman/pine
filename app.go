@@ -23,7 +23,7 @@ func newApp() (*cli.Command, error) {
 
 	return &cli.Command{
 		Name:                  appName,
-		Usage:                 "A Taiga CLI built on Taigo v2",
+		Usage:                 "A Taiga CLI built on Taigo",
 		Version:               currentVersionInfo().Version,
 		EnableShellCompletion: true,
 		ConfigureShellCompletionCommand: func(command *cli.Command) {
@@ -31,7 +31,7 @@ func newApp() (*cli.Command, error) {
 		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "instance", Usage: "Override the selected instance alias"},
-			&cli.StringFlag{Name: "output", Usage: "Output format", Value: "json"},
+			&cli.StringFlag{Name: "output", Usage: "Output format", Value: defaultOutputFormat},
 		},
 		Commands: commands,
 	}, nil
@@ -49,7 +49,7 @@ func runtimeFromContext(ctx context.Context) (*Runtime, error) {
 func resolveOutput(cmd *cli.Command) string {
 	value := strings.TrimSpace(cmd.String("output"))
 	if value == "" {
-		return "json"
+		return defaultOutputFormat
 	}
 	return value
 }
@@ -416,13 +416,22 @@ func runContextProjectAdd(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer session.close()
 
-	projectList, err := session.Client.Project.List(nil)
+	me, err := session.Client.User.Me()
+	if err != nil {
+		return err
+	}
+	projectQuery := &taigo.ProjectsQueryParameters{Member: me.ID}
+	projectQuery.MembershipsUserOrder()
+	projectList, err := session.Client.Project.List(projectQuery)
 	if err != nil {
 		return err
 	}
 	projects, err := projectList.AsProjects()
 	if err != nil {
 		return err
+	}
+	if len(projects) == 0 {
+		return fmt.Errorf("no projects found where %q is a member on instance %q", me.Username, alias)
 	}
 	options := make([]string, 0, len(projects))
 	projectIndex := map[string]*SavedProject{}

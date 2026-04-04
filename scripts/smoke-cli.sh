@@ -9,7 +9,7 @@ version_output="$("$binary_path" --version)"
 completion_output="$("$binary_path" completion bash)"
 
 grep -q '^NAME:' <<<"$help_output"
-grep -q 'A Taiga CLI built on Taigo v2' <<<"$help_output"
+grep -q 'A Taiga CLI built on Taigo' <<<"$help_output"
 grep -q '^VERSION:' <<<"$help_output"
 
 grep -q '^name: pine$' <<<"$version_output"

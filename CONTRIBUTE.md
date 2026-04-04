@@ -50,6 +50,10 @@ make windows
 
 Artifacts are written to `dist/`.
 
+`make darwin` must run on a macOS host so the release binaries keep native Keychain support through `cgo`.
+
+`make linux` and `make windows` remain pure-Go cross-builds with `CGO_ENABLED=0`.
+
 ## Local checks
 
 Run the core local checks before opening a PR:
@@ -70,7 +74,7 @@ CI also verifies:
 - `golangci-lint`
 - race detection and coverage on Linux
 - native smoke tests on Linux, macOS, and Windows
-- cross-platform release builds
+- release builds for every target, with macOS built natively on macOS and Linux/Windows built via generic cross-compilation
 
 If you want to mirror CI more closely, the commands are defined in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml), plus [`.golangci.yml`](./.golangci.yml), [`.typos.toml`](./.typos.toml), and [`.goreleaser.yml`](./.goreleaser.yml).
 
@@ -125,6 +129,8 @@ PINE_RUN_INTEGRATION=1 go test -count=1 -run '^TestIntegration' ./...
 ## Release flow
 
 Local release artifacts are produced through the `Makefile`, while tagged GitHub releases are published by GoReleaser.
+
+Tagged release publishing runs on a macOS runner so the darwin artifacts are built with `CGO_ENABLED=1`; Linux and Windows artifacts keep the existing `CGO_ENABLED=0` cross-build path.
 
 Release publishing in CI happens only for semver tags matching `v*` after all quality, test, smoke, release-target, and integration jobs pass.
 

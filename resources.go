@@ -623,7 +623,7 @@ func runList(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
 	if spec.ListExtras != nil {
 		envelope.Extra = spec.ListExtras(httpResponse)
 	}
-	return render(resolveOutput(cmd), envelope)
+	return renderView(resolveOutput(cmd), envelope, spec.Name)
 }
 
 func runGet(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
@@ -655,7 +655,7 @@ func runGet(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
 	if _, err := session.Client.Request.Get(url, &response); err != nil {
 		return err
 	}
-	return render(resolveOutput(cmd), response)
+	return renderView(resolveOutput(cmd), response, spec.Name)
 }
 
 func runCreate(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
@@ -690,7 +690,7 @@ func runCreate(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
 	if _, err := session.Client.Request.Post(session.Client.MakeURL(spec.Endpoint), payload, &response); err != nil {
 		return err
 	}
-	return render(resolveOutput(cmd), response)
+	return renderView(resolveOutput(cmd), response, spec.Name)
 }
 
 func runEdit(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
@@ -758,7 +758,7 @@ func runEdit(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
 	if _, err := session.Client.Request.Patch(url, patch, &response); err != nil {
 		return err
 	}
-	return render(resolveOutput(cmd), response)
+	return renderView(resolveOutput(cmd), response, spec.Name)
 }
 
 func runDelete(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
@@ -835,7 +835,7 @@ func runEpicBulkCreate(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	return render(resolveOutput(cmd), response)
+	return renderView(resolveOutput(cmd), response, "epics")
 }
 
 func postEpicBulkCreate(session *Session, projectID int, lines []string) ([]map[string]any, error) {

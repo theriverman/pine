@@ -84,7 +84,7 @@ Secrets are stored separately:
 
 - macOS: native Keychain
 - Windows: native Credential Manager
-- Linux: secret persistence is not supported; use environment variables instead
+- Linux: Secret Service (`gnome-keyring`) or KWallet when a desktop session exposes them; otherwise use environment variables
 
 For development and tests, `PINE_CONFIG_DIR` can override the config directory.
 
@@ -180,9 +180,9 @@ pine completion fish > ~/.config/fish/completions/pine.fish
 - `--output yaml`
 - `--output table`
 
-JSON is the default. Tables are rendered with `github.com/jedib0t/go-pretty`.
+Table is the default. Use `--output json` when you want the full raw payload.
 
-For deeply nested resources, table output is best-effort and may still be wide.
+Tables are rendered with `github.com/jedib0t/go-pretty` and prefer a curated subset of the most useful fields for common resource types such as projects, epics, user stories, tasks, and milestones.
 
 ## Common command patterns
 
@@ -260,7 +260,7 @@ pine epics bulk-creation --json=/path/to/epics.json
 
 - this milestone intentionally focuses on curated endpoints rather than the entire Taiga API surface
 - `resolver`, attachments, import/export, and other admin-heavy or specialised endpoints are not included yet
-- Linux users must provide credentials through environment variables instead of native secret storage
+- Linux native secret storage requires a running Secret Service or KWallet session; otherwise provide credentials through environment variables
 - `edit` uses merged-update behaviour; explicit field clearing is handled through `--clear`
 
 ## Contributing

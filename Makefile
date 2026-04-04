@@ -20,14 +20,27 @@ define build_binary
 GOOS=$(1) GOARCH=$(2) go build -ldflags "$(LDFLAGS)" -o "$(DIST_DIR)/$(APP)-$(1)-$(2)$(if $(filter windows,$(1)),.exe,)" .
 endef
 
-define build_release_target
+define build_release_cross_target
 mkdir -p $(DIST_DIR)
 	@set -e; \
 	for arch in $(RELEASE_ARCHES); do \
-		printf "building %s/%s\n" "$(1)" "$$arch"; \
+		printf "building %s/%s (CGO_ENABLED=0)\n" "$(1)" "$$arch"; \
 		ext=""; \
 		if [ "$(1)" = "windows" ]; then ext=".exe"; fi; \
-		GOOS=$(1) GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o "$(DIST_DIR)/$(APP)-$(1)-$$arch$$ext" .; \
+		CGO_ENABLED=0 GOOS=$(1) GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o "$(DIST_DIR)/$(APP)-$(1)-$$arch$$ext" .; \
+	done
+endef
+
+define build_release_darwin_target
+@if [ "$(HOST_GOOS)" != "darwin" ]; then \
+	printf "darwin release builds require a macOS host because Keychain support needs cgo\n" >&2; \
+	exit 1; \
+fi
+mkdir -p $(DIST_DIR)
+	@set -e; \
+	for arch in $(RELEASE_ARCHES); do \
+		printf "building darwin/%s (CGO_ENABLED=1)\n" "$$arch"; \
+		CGO_ENABLED=1 GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o "$(DIST_DIR)/$(APP)-darwin-$$arch" .; \
 	done
 endef
 
@@ -47,16 +60,16 @@ build: ## Build a binary for the current host OS and architecture into dist/
 smoke: build ## Build and smoke test the current host binary
 	./scripts/smoke-cli.sh "$(HOST_BINARY)"
 
-release-builds: $(RELEASE_TARGETS) ## Build all cross-platform release binaries into dist/
+release-builds: $(RELEASE_TARGETS) ## Build release binaries for all supported OS targets into dist/ (macOS host required)
 
-darwin: ## Build macOS binaries for amd64 and arm64 into dist/
-	$(call build_release_target,darwin)
+darwin: ## Build macOS release binaries for amd64 and arm64 into dist/ (macOS host required)
+	$(call build_release_darwin_target)
 
 linux: ## Build Linux binaries for amd64 and arm64 into dist/
-	$(call build_release_target,linux)
+	$(call build_release_cross_target,linux)
 
 windows: ## Build Windows binaries for amd64 and arm64 into dist/
-	$(call build_release_target,windows)
+	$(call build_release_cross_target,windows)
 
 clean: ## Remove generated release binaries
 	rm -rf $(DIST_DIR)

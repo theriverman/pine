@@ -11,16 +11,21 @@ type contextKey string
 const runtimeContextKey contextKey = "pine.runtime"
 
 const (
-	appName            = "pine"
-	configFileName     = "config.yaml"
-	keyringService     = "pine"
-	envInstance        = "PINE_INSTANCE"
-	envAuthType        = "PINE_AUTH_TYPE"
-	envUsername        = "PINE_USERNAME"
-	envPassword        = "PINE_PASSWORD"
-	envToken           = "PINE_TOKEN"
-	envConfigDir       = "PINE_CONFIG_DIR"
-	defaultHTTPTimeout = 15 * time.Second
+	appName             = "pine"
+	configFileName      = "config.yaml"
+	keyringService      = "io.github.theriverman.pine"
+	touchIDAccount      = "io.github.theriverman.pine.biometrics"
+	touchIDService      = keyringService
+	keyringKWalletApp   = keyringService
+	keyringKWalletDir   = appName
+	envInstance         = "PINE_INSTANCE"
+	envAuthType         = "PINE_AUTH_TYPE"
+	envUsername         = "PINE_USERNAME"
+	envPassword         = "PINE_PASSWORD"
+	envToken            = "PINE_TOKEN"
+	envConfigDir        = "PINE_CONFIG_DIR"
+	defaultOutputFormat = "table"
+	defaultHTTPTimeout  = 15 * time.Second
 )
 
 type Config struct {

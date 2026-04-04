@@ -1,4 +1,4 @@
-//go:build darwin || windows
+//go:build darwin || windows || linux
 
 package main
 
@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/99designs/keyring"
+	"github.com/byteness/keyring"
 )
 
 type keyringSecretStore struct {
@@ -17,10 +17,7 @@ type keyringSecretStore struct {
 }
 
 func NewSecretStore() SecretStore {
-	ring, err := keyring.Open(keyring.Config{
-		ServiceName:     keyringService,
-		AllowedBackends: allowedBackendsForPlatform(),
-	})
+	ring, err := keyring.Open(secretStoreConfig())
 	if err != nil {
 		return &keyringSecretStore{supported: false}
 	}
@@ -31,12 +28,35 @@ func NewSecretStore() SecretStore {
 	}
 }
 
+func secretStoreConfig() keyring.Config {
+	cfg := keyring.Config{
+		ServiceName:             keyringService,
+		AllowedBackends:         allowedBackendsForPlatform(),
+		LibSecretCollectionName: keyringService,
+		KWalletAppID:            keyringKWalletApp,
+		KWalletFolder:           keyringKWalletDir,
+	}
+
+	if runtime.GOOS == "darwin" {
+		cfg.UseBiometrics = true
+		cfg.TouchIDAccount = touchIDAccount
+		cfg.TouchIDService = touchIDService
+	}
+
+	return cfg
+}
+
 func allowedBackendsForPlatform() []keyring.BackendType {
 	switch runtime.GOOS {
 	case "darwin":
 		return []keyring.BackendType{keyring.KeychainBackend}
 	case "windows":
 		return []keyring.BackendType{keyring.WinCredBackend}
+	case "linux":
+		return []keyring.BackendType{
+			keyring.SecretServiceBackend,
+			keyring.KWalletBackend,
+		}
 	default:
 		return nil
 	}
