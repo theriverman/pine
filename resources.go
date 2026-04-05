@@ -40,6 +40,7 @@ type resourceSpec struct {
 	Usage                 string
 	QueryFields           []fieldSpec
 	WriteFields           []fieldSpec
+	ListFlags             []cli.Flag
 	SupportsList          bool
 	SupportsGet           bool
 	SupportsCreate        bool
@@ -47,6 +48,7 @@ type resourceSpec struct {
 	SupportsDelete        bool
 	DefaultProjectInQuery bool
 	DefaultProjectInBody  bool
+	PrepareListQuery      func(*Session, *cli.Command, url.Values) error
 	ListExtras            func(*http.Response) map[string]any
 	GetURL                func(*Session, string) (string, error)
 }
@@ -294,11 +296,15 @@ func resourceSpecs() []resourceSpec {
 			Usage:          "Manage Taiga projects",
 			QueryFields:    projectQuery,
 			WriteFields:    projectWrite,
+			ListFlags:      projectListFlags(),
 			SupportsList:   true,
 			SupportsGet:    true,
 			SupportsCreate: true,
 			SupportsEdit:   true,
 			SupportsDelete: true,
+			PrepareListQuery: func(session *Session, cmd *cli.Command, values url.Values) error {
+				return prepareProjectListQuery(session, cmd, values)
+			},
 			GetURL: func(session *Session, identifier string) (string, error) {
 				if id, ok := parseIdentifier(identifier); ok {
 					return session.Client.MakeURL("projects", strconv.Itoa(id)), nil
@@ -456,7 +462,7 @@ func resourceCommand(spec resourceSpec) *cli.Command {
 		command.Commands = append(command.Commands, &cli.Command{
 			Name:  "list",
 			Usage: "List resources",
-			Flags: append(resourceQueryFlags(spec.QueryFields), commonListFlags()...),
+			Flags: resourceListFlags(spec),
 			Action: func(ctx context.Context, cmd *cli.Command) error {
 				return runList(ctx, cmd, spec)
 			},
@@ -534,6 +540,42 @@ func commonListFlags() []cli.Flag {
 	}
 }
 
+func resourceListFlags(spec resourceSpec) []cli.Flag {
+	flags := resourceQueryFlags(spec.QueryFields)
+	flags = append(flags, spec.ListFlags...)
+	flags = append(flags, commonListFlags()...)
+	return flags
+}
+
+func projectListFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "mine",
+			Usage: "Only include projects where the current authenticated user is a member",
+		},
+	}
+}
+
+func prepareProjectListQuery(session *Session, cmd *cli.Command, values url.Values) error {
+	if !cmd.Bool("mine") {
+		return nil
+	}
+	if values.Get("member") != "" || values.Get("members") != "" {
+		return errors.New("--mine cannot be combined with --member or --members")
+	}
+
+	me, err := session.Client.User.Me()
+	if err != nil {
+		return fmt.Errorf("resolve current user for --mine: %w", err)
+	}
+	if me.ID <= 0 {
+		return errors.New("resolve current user for --mine: missing user ID")
+	}
+
+	values.Set("member", strconv.Itoa(me.ID))
+	return nil
+}
+
 func jsonFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{Name: "from-json", Usage: "Path to a JSON file to merge into the request", Aliases: []string{"json"}},
@@ -592,6 +634,11 @@ func runList(ctx context.Context, cmd *cli.Command, spec resourceSpec) error {
 	queryValues, err := collectQueryValues(cmd, spec.QueryFields)
 	if err != nil {
 		return err
+	}
+	if spec.PrepareListQuery != nil {
+		if err := spec.PrepareListQuery(session, cmd, queryValues); err != nil {
+			return err
+		}
 	}
 	if spec.DefaultProjectInQuery && queryValues.Get("project") == "" && queryValues.Get("project__slug") == "" && session.activeProjectID() > 0 {
 		queryValues.Set("project", strconv.Itoa(session.activeProjectID()))

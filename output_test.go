@@ -83,6 +83,7 @@ func TestTabulariseUserStoryPreset(t *testing.T) {
 				"name": "In Progress",
 			},
 			"project_extra_info": map[string]any{
+				"id":   29,
 				"name": "CLI",
 				"slug": "cli",
 			},
@@ -105,8 +106,58 @@ func TestTabulariseUserStoryPreset(t *testing.T) {
 		"3, 5",
 		"1 / Owner User / owner",
 		"In Progress",
-		"CLI",
+		"29 / CLI",
 		"cli",
+	}
+	if !reflect.DeepEqual(rows[0], wantRow) {
+		t.Fatalf("row = %#v, want %#v", rows[0], wantRow)
+	}
+}
+
+func TestTabulariseTaskPresetIncludesIDsInRelatedColumns(t *testing.T) {
+	t.Parallel()
+
+	rows, headers := tabularise([]map[string]any{
+		{
+			"id":      8868813,
+			"subject": "Holdanya",
+			"owner_extra_info": map[string]any{
+				"id":                836830,
+				"full_name_display": "Kristof",
+				"username":          "theriverman67",
+			},
+			"status_extra_info": map[string]any{
+				"name": "New",
+			},
+			"user_story_extra_info": map[string]any{
+				"id":      112233,
+				"subject": "Vashegyek",
+			},
+			"project_extra_info": map[string]any{
+				"id":   1711749,
+				"name": "Thy Catafalque",
+				"slug": "theriverman67-x",
+			},
+		},
+	}, renderOptions{View: "tasks"})
+
+	wantHeaders := []string{"ID", "Subject", "Assigned To", "Owner", "Status", "User Story", "Project", "Slug"}
+	if !reflect.DeepEqual(headers, wantHeaders) {
+		t.Fatalf("headers = %#v, want %#v", headers, wantHeaders)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("row count = %d, want 1", len(rows))
+	}
+
+	wantRow := table.Row{
+		"8868813",
+		"Holdanya",
+		"",
+		"836830 / Kristof / theriverman67",
+		"New",
+		"112233 / Vashegyek",
+		"1711749 / Thy Catafalque",
+		"theriverman67-x",
 	}
 	if !reflect.DeepEqual(rows[0], wantRow) {
 		t.Fatalf("row = %#v, want %#v", rows[0], wantRow)
@@ -182,5 +233,85 @@ func TestRenderTableSummaryIncludesPaginationAndExtra(t *testing.T) {
 	}
 	if !strings.Contains(output, "Closed Milestones: 2") {
 		t.Fatalf("expected closed milestones summary in output: %s", output)
+	}
+}
+
+func TestRenderTableContextViewRendersReadableSummary(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	err := renderTable(&out, ContextView{
+		CurrentInstance: "tree",
+		Instance: &Instance{
+			Alias:       "tree",
+			FrontendURL: "https://tree.taiga.io",
+			APIURL:      "https://api.taiga.io/api/v1",
+			AuthType:    "normal",
+			Username:    "theriverman67",
+			DefaultProject: &SavedProject{
+				ID:   1711749,
+				Slug: "theriverman67-x",
+				Name: "X",
+			},
+			SavedProjects: []*SavedProject{
+				{
+					ID:   1711749,
+					Slug: "theriverman67-x",
+					Name: "X",
+				},
+				{
+					ID:   1711750,
+					Slug: "theriverman67-y",
+					Name: "Y",
+				},
+			},
+		},
+		DefaultProject: &SavedProject{
+			ID:   1711749,
+			Slug: "theriverman67-x",
+			Name: "X",
+		},
+	}, renderOptions{View: "context"})
+	if err != nil {
+		t.Fatalf("renderTable returned error: %v", err)
+	}
+
+	output := out.String()
+	for _, snippet := range []string{
+		"Current context",
+		"Instance:         tree",
+		"Frontend URL:     https://tree.taiga.io",
+		"API URL:          https://api.taiga.io/api/v1",
+		"Auth Type:        normal",
+		"Username:         theriverman67",
+		"Default Project:  X (theriverman67-x, ID 1711749)",
+		"Saved projects",
+		"| yes     | 1711749 | theriverman67-x | X    |",
+		"|         | 1711750 | theriverman67-y | Y    |",
+	} {
+		if !strings.Contains(output, snippet) {
+			t.Fatalf("expected %q in output:\n%s", snippet, output)
+		}
+	}
+	if strings.Contains(output, "| FIELD ") || strings.Contains(output, "| VALUE ") {
+		t.Fatalf("expected context view to avoid generic field/value table:\n%s", output)
+	}
+}
+
+func TestRenderTableContextViewWithoutSelection(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	err := renderTable(&out, ContextView{}, renderOptions{View: "context"})
+	if err != nil {
+		t.Fatalf("renderTable returned error: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "Instance:  none selected") {
+		t.Fatalf("expected empty selection message in output:\n%s", output)
+	}
+	if strings.Contains(output, "Saved projects") {
+		t.Fatalf("did not expect saved projects section in output:\n%s", output)
 	}
 }

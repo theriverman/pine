@@ -52,6 +52,12 @@ type SavedProject struct {
 	Name string `yaml:"name" json:"name"`
 }
 
+type ContextView struct {
+	CurrentInstance string        `yaml:"current_instance,omitempty" json:"current_instance,omitempty"`
+	Instance        *Instance     `yaml:"instance,omitempty" json:"instance,omitempty"`
+	DefaultProject  *SavedProject `yaml:"default_project,omitempty" json:"default_project,omitempty"`
+}
+
 type Runtime struct {
 	ConfigPath string
 	Config     *Config

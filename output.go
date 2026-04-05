@@ -65,7 +65,7 @@ var tablePresets = map[string]tablePreset{
 			pathColumn("Assigned Users", "assigned_users"),
 			personColumn("Owner", "owner_extra_info", "owner"),
 			pathColumn("Status", "status_extra_info.name", "status"),
-			pathColumn("Project", "project_extra_info.name", "project"),
+			joinedPathColumn("Project", "project_extra_info.id", "project_extra_info.name"),
 			pathColumn("Slug", "project_extra_info.slug"),
 		},
 	},
@@ -88,8 +88,8 @@ var tablePresets = map[string]tablePreset{
 			personColumn("Assigned To", "assigned_to_extra_info", "assigned_to"),
 			personColumn("Owner", "owner_extra_info", "owner"),
 			pathColumn("Status", "status_extra_info.name", "status"),
-			pathColumn("User Story", "user_story_extra_info.subject", "user_story"),
-			pathColumn("Project", "project_extra_info.name", "project"),
+			joinedPathColumn("User Story", "user_story_extra_info.id", "user_story_extra_info.subject"),
+			joinedPathColumn("Project", "project_extra_info.id", "project_extra_info.name"),
 			pathColumn("Slug", "project_extra_info.slug"),
 		},
 	},
@@ -151,6 +151,10 @@ func renderYAML(w io.Writer, value any) error {
 }
 
 func renderTable(w io.Writer, value any, options renderOptions) error {
+	if handled, err := renderCustomTable(w, value, options); handled {
+		return err
+	}
+
 	switch typed := value.(type) {
 	case PaginationEnvelope:
 		rendered, err := renderTableRows(w, typed.Items, options)
@@ -171,6 +175,110 @@ func renderTable(w io.Writer, value any, options renderOptions) error {
 		}
 		return nil
 	}
+}
+
+func renderCustomTable(w io.Writer, value any, options renderOptions) (bool, error) {
+	switch options.View {
+	case "context":
+		return renderContextTable(w, value)
+	default:
+		return false, nil
+	}
+}
+
+func renderContextTable(w io.Writer, value any) (bool, error) {
+	payload, ok := asJSONMap(value)
+	if !ok {
+		return false, nil
+	}
+
+	currentInstance := strings.TrimSpace(fmtScalar(payload["current_instance"]))
+	instance, _ := nestedJSONMap(payload, "instance")
+	defaultProject := payload["default_project"]
+	if defaultProject == nil && len(instance) > 0 {
+		defaultProject = instance["default_project"]
+	}
+
+	details := []struct {
+		label string
+		value string
+	}{
+		{label: "Instance", value: valueOrDefault(currentInstance, "none selected")},
+	}
+	for _, item := range []struct {
+		label string
+		key   string
+	}{
+		{label: "Frontend URL", key: "frontend_url"},
+		{label: "API URL", key: "api_url"},
+		{label: "Auth Type", key: "auth_type"},
+		{label: "Username", key: "username"},
+	} {
+		if formatted := strings.TrimSpace(fmtScalar(instance[item.key])); formatted != "" {
+			details = append(details, struct {
+				label string
+				value string
+			}{label: item.label, value: formatted})
+		}
+	}
+	if formatted := formatSavedProjectSummary(defaultProject); formatted != "" {
+		details = append(details, struct {
+			label string
+			value string
+		}{label: "Default Project", value: formatted})
+	} else if currentInstance != "" {
+		details = append(details, struct {
+			label string
+			value string
+		}{label: "Default Project", value: "none selected"})
+	}
+
+	if _, err := fmt.Fprintln(w, "Current context"); err != nil {
+		return true, err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return true, err
+	}
+	if err := writeLabeledValues(w, details); err != nil {
+		return true, err
+	}
+
+	savedProjects, _ := nestedJSONMaps(instance, "saved_projects")
+	if len(savedProjects) == 0 {
+		return true, nil
+	}
+
+	if _, err := fmt.Fprintln(w); err != nil {
+		return true, err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return true, err
+	}
+	if _, err := fmt.Fprintln(w, "Saved projects"); err != nil {
+		return true, err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return true, err
+	}
+
+	defaultKey := savedProjectMatchKey(defaultProject)
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+	t.AppendHeader(table.Row{"Default", "ID", "Slug", "Name"})
+	for _, project := range savedProjects {
+		marker := ""
+		if key := savedProjectMatchKey(project); key != "" && key == defaultKey {
+			marker = "yes"
+		}
+		t.AppendRow(table.Row{
+			marker,
+			fmtScalar(project["id"]),
+			fmtScalar(project["slug"]),
+			fmtScalar(project["name"]),
+		})
+	}
+	t.Render()
+	return true, nil
 }
 
 func renderTableRows(w io.Writer, value any, options renderOptions) (bool, error) {
@@ -367,6 +475,24 @@ func rowsFromKeyValueMap(item map[string]any) ([]table.Row, []string) {
 	return rows, []string{"field", "value"}
 }
 
+func writeLabeledValues(w io.Writer, items []struct {
+	label string
+	value string
+}) error {
+	width := 0
+	for _, item := range items {
+		if len(item.label) > width {
+			width = len(item.label)
+		}
+	}
+	for _, item := range items {
+		if _, err := fmt.Fprintf(w, "%-*s  %s\n", width+1, item.label+":", item.value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func pathColumn(header string, paths ...string) tableColumn {
 	return tableColumn{
 		Header: header,
@@ -379,6 +505,23 @@ func pathColumn(header string, paths ...string) tableColumn {
 				}
 			}
 			return ""
+		},
+	}
+}
+
+func joinedPathColumn(header string, paths ...string) tableColumn {
+	return tableColumn{
+		Header: header,
+		Extract: func(item map[string]any) string {
+			parts := make([]string, 0, len(paths))
+			for _, path := range paths {
+				if value, ok := valueAtPath(item, path); ok {
+					if formatted := strings.TrimSpace(fmtScalar(value)); formatted != "" {
+						parts = append(parts, formatted)
+					}
+				}
+			}
+			return strings.Join(parts, " / ")
 		},
 	}
 }
@@ -433,6 +576,22 @@ func valueAtPath(item map[string]any, path string) (any, bool) {
 		current = next
 	}
 	return current, true
+}
+
+func nestedJSONMap(item map[string]any, key string) (map[string]any, bool) {
+	value, ok := item[key]
+	if !ok || value == nil {
+		return nil, false
+	}
+	return asJSONMap(value)
+}
+
+func nestedJSONMaps(item map[string]any, key string) ([]map[string]any, bool) {
+	value, ok := item[key]
+	if !ok || value == nil {
+		return nil, false
+	}
+	return asJSONMaps(value)
 }
 
 func asJSONMap(value any) (map[string]any, bool) {
@@ -497,6 +656,43 @@ func humanizeHeader(key string) string {
 	return strings.Join(parts, " ")
 }
 
+func formatSavedProjectSummary(value any) string {
+	project, ok := asJSONMap(value)
+	if !ok {
+		return ""
+	}
+
+	name := strings.TrimSpace(fmtScalar(project["name"]))
+	details := []string{}
+	if slug := strings.TrimSpace(fmtScalar(project["slug"])); slug != "" {
+		details = append(details, slug)
+	}
+	if id := strings.TrimSpace(fmtScalar(project["id"])); id != "" {
+		details = append(details, "ID "+id)
+	}
+	if len(details) == 0 {
+		return name
+	}
+	if name == "" {
+		return strings.Join(details, ", ")
+	}
+	return fmt.Sprintf("%s (%s)", name, strings.Join(details, ", "))
+}
+
+func savedProjectMatchKey(value any) string {
+	project, ok := asJSONMap(value)
+	if !ok {
+		return ""
+	}
+	if slug := strings.TrimSpace(fmtScalar(project["slug"])); slug != "" {
+		return "slug:" + slug
+	}
+	if id := strings.TrimSpace(fmtScalar(project["id"])); id != "" {
+		return "id:" + id
+	}
+	return ""
+}
+
 func fmtScalar(value any) string {
 	switch typed := value.(type) {
 	case nil:
@@ -558,4 +754,11 @@ func joinScalarSlice(items []any) string {
 		parts = append(parts, formatted)
 	}
 	return strings.Join(parts, ", ")
+}
+
+func valueOrDefault(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }

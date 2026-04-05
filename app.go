@@ -75,11 +75,11 @@ func newContextCommand() *cli.Command {
 					if currentInstance != nil {
 						defaultProject = currentInstance.DefaultProject
 					}
-					return render(resolveOutput(cmd), map[string]any{
-						"current_instance": rt.Config.CurrentInstance,
-						"instance":         currentInstance,
-						"default_project":  defaultProject,
-					})
+					return renderView(resolveOutput(cmd), ContextView{
+						CurrentInstance: rt.Config.CurrentInstance,
+						Instance:        currentInstance,
+						DefaultProject:  defaultProject,
+					}, "context")
 				},
 			},
 			{

@@ -184,6 +184,8 @@ Table is the default. Use `--output json` when you want the full raw payload.
 
 Tables are rendered with `github.com/jedib0t/go-pretty` and prefer a curated subset of the most useful fields for common resource types such as projects, epics, user stories, tasks, and milestones.
 
+`pine ctx show` uses a dedicated table view that summarises the active instance, authentication settings, default project, and saved projects. Project and task tables also include related IDs alongside names where that makes cross-referencing easier.
+
 ## Common command patterns
 
 List resources:
@@ -192,6 +194,7 @@ List resources:
 pine epics list
 pine epics list --project=1 --status-is-closed=false
 pine projects list --page=1 --page-size=10
+pine projects list --mine
 ```
 
 Fetch a resource:
@@ -250,6 +253,7 @@ pine epics bulk-creation --json=/path/to/epics.json
 - query and payload flags expose kebab-case names
 - where useful, Taiga-style aliases are also accepted, for example `--status__is_closed`
 - project-scoped create commands fall back to the saved default project when `--project` is omitted
+- `pine projects list --mine` filters projects to the current authenticated user and cannot be combined with `--member` or `--members`
 - create and edit accept `--from-json`; CLI flags override values from the JSON file
 - clone commands accept `--subject` or `--subject-prefix`; by default the cloned subject is prefixed with `Copy of `
 - `pine us clone --with-subtasks` clones the user story and recreates its related tasks under the cloned user story
