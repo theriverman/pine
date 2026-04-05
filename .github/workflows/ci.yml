@@ -6,7 +6,13 @@ on:
       - "**"
     tags:
       - "v*"
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
   pull_request:
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
@@ -23,8 +29,73 @@ defaults:
     shell: bash
 
 jobs:
+  changes:
+    name: Detect Relevant Changes
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.decide.outputs.should_run }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether CI should run
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ZERO_SHA: 0000000000000000000000000000000000000000
+        run: |
+          set -euo pipefail
+
+          case "$EVENT_NAME" in
+            schedule|workflow_dispatch)
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            pull_request)
+              changed_files="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
+              ;;
+            push)
+              if [ "$BEFORE" = "$ZERO_SHA" ]; then
+                if git rev-parse "${AFTER}^" >/dev/null 2>&1; then
+                  changed_files="$(git diff --name-only --no-renames "${AFTER}^" "$AFTER")"
+                else
+                  changed_files="$(git diff-tree --no-commit-id --name-only --no-renames -r "$AFTER")"
+                fi
+              else
+                changed_files="$(git diff --name-only --no-renames "$BEFORE" "$AFTER")"
+              fi
+              ;;
+            *)
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          if [ -z "$changed_files" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf 'Changed files:\n%s\n' "$changed_files"
+
+          if printf '%s\n' "$changed_files" | grep -qvE '\.md$'; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Markdown-only change set detected; skipping CI jobs."
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+
   quality:
     name: Quality
+    needs: changes
+    if: needs.changes.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -77,6 +148,8 @@ jobs:
 
   test-matrix:
     name: Tests / ${{ matrix.runner }}
+    needs: changes
+    if: needs.changes.outputs.should-run == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -101,6 +174,8 @@ jobs:
 
   race-and-coverage:
     name: Race And Coverage
+    needs: changes
+    if: needs.changes.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -128,6 +203,8 @@ jobs:
 
   native-smoke:
     name: Native Smoke / ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: changes
+    if: needs.changes.outputs.should-run == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -178,6 +255,8 @@ jobs:
 
   release-targets:
     name: Release Target / ${{ matrix.target }}
+    needs: changes
+    if: needs.changes.outputs.should-run == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -233,6 +312,8 @@ jobs:
 
   integration-live:
     name: Live Integration
+    needs: changes
+    if: needs.changes.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -305,8 +386,9 @@ jobs:
 
   publish-release:
     name: Publish Release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: needs.changes.outputs.should-run == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs:
+      - changes
       - quality
       - test-matrix
       - race-and-coverage

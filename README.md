@@ -6,6 +6,7 @@
 </picture>
 </p>
 
+[![CI](https://github.com/theriverman/pine/actions/workflows/ci.yml/badge.svg)](https://github.com/theriverman/pine/actions/workflows/ci.yml)
 
 # Pine
 

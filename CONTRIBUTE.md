@@ -75,6 +75,7 @@ CI also verifies:
 - race detection and coverage on Linux
 - native smoke tests on Linux, macOS, and Windows
 - release builds for every target, with macOS built natively on macOS and Linux/Windows built via generic cross-compilation
+- Markdown-only branch pushes and PR updates are skipped; semver tags pointing at Markdown-only commits are also gated off before the expensive CI and release jobs start
 
 If you want to mirror CI more closely, the commands are defined in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml), plus [`.golangci.yml`](./.golangci.yml), [`.typos.toml`](./.typos.toml), and [`.goreleaser.yml`](./.goreleaser.yml).
 
