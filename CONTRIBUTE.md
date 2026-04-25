@@ -7,7 +7,7 @@ For end-user setup and CLI usage, see [`README.md`](./README.md).
 ## Toolchain
 
 - Go version is defined in [`go.mod`](./go.mod)
-- the repository currently pins `go 1.25.0` with `toolchain go1.25.8`
+- the repository currently pins `go 1.25.0` with `toolchain go1.25.9`
 - `make` is used for local and release builds
 - Docker is required if you want to run the live integration suite locally
 

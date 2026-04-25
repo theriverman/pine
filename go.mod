@@ -2,7 +2,7 @@ module pine
 
 go 1.25.0
 
-toolchain go1.25.8
+toolchain go1.25.9
 
 require (
 	github.com/byteness/keyring v1.3.6

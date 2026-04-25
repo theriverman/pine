@@ -12,7 +12,7 @@ Guidance for coding agents working in this repository.
   - `gopkg.in/yaml.v3` for config serialization
 - Toolchain is pinned in `go.mod`:
   - `go 1.25.0`
-  - `toolchain go1.25.8`
+  - `toolchain go1.25.9`
 
 ## Repository Map
 
