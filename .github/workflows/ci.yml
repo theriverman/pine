@@ -13,8 +13,6 @@ on:
     paths-ignore:
       - "*.md"
       - "**/*.md"
-  schedule:
-    - cron: "17 3 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -53,7 +51,7 @@ jobs:
           set -euo pipefail
 
           case "$EVENT_NAME" in
-            schedule|workflow_dispatch)
+            workflow_dispatch)
               echo "should_run=true" >> "$GITHUB_OUTPUT"
               exit 0
               ;;
