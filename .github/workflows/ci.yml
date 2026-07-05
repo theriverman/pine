@@ -46,7 +46,7 @@ jobs:
           AFTER: ${{ github.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          ZERO_SHA: 0000000000000000000000000000000000000000
+          ZERO_SHA: "0000000000000000000000000000000000000000"
         run: |
           set -euo pipefail
 
